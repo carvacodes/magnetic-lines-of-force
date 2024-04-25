@@ -7,6 +7,11 @@ canvas.height = innerHeight;
 window.addEventListener("resize", function () {
   canvas.width = innerWidth;
   canvas.height = innerHeight;
+
+  filings.forEach(filing => {
+    filing.x = Math.random() * innerWidth;
+    filing.y = Math.random() * innerHeight;
+  });
 });
 
 let numFilings = Math.round(innerWidth * 1.5);
@@ -119,32 +124,28 @@ for (let i = 0; i < numFilings; i++) {
   filings[i].rotate();
 }
 
-document.addEventListener("mousemove", function (e) {
+document.addEventListener("mousemove", handleMove, {passive: false});
+document.addEventListener("touchmove", handleMove, {passive: false});
+
+document.addEventListener("click", handleClick);
+
+function handleMove(e) {
   e.preventDefault();
-  moving = 1;
+  if (e.changedTouches) {
+    e = e.touches[0];
+  }
+  
   mouseX = e.clientX;
   mouseY = e.clientY;
+  moving = 1;
   poleN = mouseX - magWidth / 2 + magHeight / 2;
   poleS = mouseX + magWidth / 2 - magHeight / 2;
-});
+}
 
-document.addEventListener(
-  "touchmove",
-  function (e) {
-    e.preventDefault();
-    mouseX = e.touches[0].pageX;
-    mouseY = e.touches[0].pageY;
-    moving = 1;
-    poleN = mouseX - magWidth / 2 + magHeight / 2;
-    poleS = mouseX + magWidth / 2 - magHeight / 2;
-  },
-  {passive: false}
-);
-
-document.addEventListener("click", function (e) {
+function handleClick(e) {
   e.preventDefault();
   magnetVisible = magnetVisible ? 0 : 1;
-});
+}
 
 function drawMagnet() {
   ctx.fillStyle = "#a22";
@@ -156,6 +157,8 @@ function drawMagnet() {
   );
   ctx.fillStyle = "#22a";
   ctx.fillRect(mouseX, mouseY - magHeight / 2, magWidth / 2, magHeight);
+
+  
 }
 
 function drawAttrPoints() {
