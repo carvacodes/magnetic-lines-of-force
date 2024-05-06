@@ -177,7 +177,7 @@ function animate() {
     return;
   }
 
-  frameTime = currentTime;
+  currentTime = frameTime;
 
   if (magnetVisible) {
     ctx.clearRect(0, 0, innerWidth, innerHeight);
