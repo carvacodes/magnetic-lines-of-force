@@ -14,7 +14,8 @@ window.addEventListener('load', ()=>{
       this.nearN;                             // a boolean indicating that the filing is nearer the north magnet pole
       this.nearS;                             // a boolean indicating that the filing is nearer the south magnet pole
       this.length = Math.random();            // the filing's length factor. multiplied by the global filingLength to get length during drawDynamic()
-      this.dynamicSpeed = 0.15;               // the filing's draw speed during drawDynamic()
+      this.dynamicSpeed = 0.5;                // the filing's draw speed during drawDynamic()
+      this.drawingFromOrigin = true;          // controls whether the filing is drawing from x,y to its current animation length position or from its current animation length position to its max length
       this.distanceToPoles = {n: 0, s: 0};    // tracks the filing's distance to each magnet pole
       this.pullStrength = 1;                  // animation/rotation speed factor that decreases with the square of the distance from the nearest magnet pole
 
@@ -57,13 +58,15 @@ window.addEventListener('load', ()=>{
     ////////////////////////////////
     drawStatic() {
       // draw filings closer to the left side in red, filings closer to the right side in blue
-      ctx.strokeStyle = this.nearN ? "#f00" : "#00f";
+      // ctx.strokeStyle = this.nearN ? "#f00" : "#00f";
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 1;
       
       // draw each filing at the correct orientation using its facing angle
-      let x1 = this.x + Math.cos(Math.PI * this.facing) * filingLength;
-      let y1 = this.y + Math.sin(Math.PI * this.facing) * filingLength;
-      let x2 = this.x + Math.cos(Math.PI * (this.facing + 1)) * filingLength;
-      let y2 = this.y + Math.sin(Math.PI * (this.facing + 1)) * filingLength;
+      let x1 = this.x + Math.cos(Math.PI * this.facing) * filingLength / 2;
+      let y1 = this.y + Math.sin(Math.PI * this.facing) * filingLength / 2;
+      let x2 = this.x + Math.cos(Math.PI * (this.facing + 1)) * filingLength / 2;
+      let y2 = this.y + Math.sin(Math.PI * (this.facing + 1)) * filingLength / 2;
 
       ctx.beginPath();
       ctx.moveTo(x1, y1);
@@ -75,40 +78,56 @@ window.addEventListener('load', ()=>{
     //        drawDynamic()        //
     /////////////////////////////////
     drawDynamic(refreshThrottle) {
-      // if the filing's animated length is greater than or equal to one, move it to a new random position and reset its length to zero
-      if (this.length >= 1 || this.distanceToPoles.n - this.length * filingLength <= filingLength || this.distanceToPoles.s - this.length * filingLength <= filingLength) {
+      // if the filing animation would have it animate through a pole, or if it has completed a full animation cycle, reset its animation
+      if ((this.length >= 1 && !this.drawingFromOrigin) || this.distanceToPoles.n - this.length * filingLength <= 0 || this.distanceToPoles.s - this.length * filingLength <= 0) {
         this.length = 0;
-        /*
-        when not commented out, the next three lines allow the filing to jump to a random location when the its animation is over
-        interestingly, this creates a visual quirk where the area immediately around a magnet pole has fewer filings, since that area's
-        filings will always finish their animations quickly and jump to an area of the screen where they take longer to refresh
-        */
-        // this.x = Math.random() * innerWidth;
-        // this.y = Math.random() * innerHeight;
-        // this.rotate();
+        this.drawingFromOrigin = true;
+      } else if (this.length >= 1 && this.drawingFromOrigin) {    // if a filing animation has reached length == 1 but it is on its first phase of animation, reset its length and start animation phase 2
+        this.length = 0;
+        this.drawingFromOrigin = false;
       } else {
-        this.length += this.dynamicSpeed * refreshThrottle * this.pullStrength;
+        this.length += this.dynamicSpeed * refreshThrottle * this.pullStrength;   // otherwise, update a filing's animation length
       }
 
-      let lightness = this.nearN ? Math.round(40 * (1 - (this.distanceToPoles.n / maxDistance))) : Math.round(40 * (1 - (this.distanceToPoles.s / maxDistance)));
-      let hue = 360;
+      // this normalizes the distance to the nearest pole on a scale of 30, where a value of 30 is on a magnet pole and a value of 0 is infinitely far away
+      let distFactor30 = this.nearN ? Math.round(30 * (1 - (this.distanceToPoles.n / maxDistance))) : Math.round(30 * (1 - (this.distanceToPoles.s / maxDistance)));
 
       // draw filings closer to the left side in red, filings closer to the right side in blue
       // filings between the two poles should be on a gradient from blue to red depending on their proximity to one pole or the other
       if (this.x < poleN.x) {
-        ctx.strokeStyle = `hsl(360, 100%, ${10 + lightness}%)`;
+        ctx.strokeStyle = `hsl(360, 100%, ${30 + distFactor30}%)`;
       } else if (this.x > poleS.x) {
-        ctx.strokeStyle = `hsl(240, 100%, ${10 + lightness}%)`;
+        ctx.strokeStyle = `hsl(240, 100%, ${30 + distFactor30}%)`;
       } else {
-        ctx.strokeStyle = `hsl(${360 - (120 * (Math.abs(this.x - poleN.x) / magWidth))}, 100%, ${10 + lightness}%)`;
+        ctx.strokeStyle = `hsl(${360 - (120 * (Math.abs(this.x - poleN.x) / magWidth))}, 100%, ${30 + distFactor30}%)`;
       }
 
-      let x1 = this.x + Math.cos(Math.PI * this.facing) * (filingLength * this.length * 2);
-      let y1 = this.y + Math.sin(Math.PI * this.facing) * (filingLength * this.length * 2);
+      // use heavier line widths for filings closer to a magnet pole
+      ctx.lineWidth = 2 * (distFactor30 / 30);
+      
+      // store the angle bases here to avoid repeated sin/cos calculations
+      let xAngleBasis = Math.cos(Math.PI * this.facing);
+      let yAngleBasis = Math.sin(Math.PI * this.facing);
+
+      // the farthest point of a filing from the magnet pole
+      let x1Basis = this.x - (xAngleBasis * (filingLength / 2));
+      let y1Basis = this.y - (yAngleBasis * (filingLength / 2));
+
+      // the nearest point of a filing to a magnet pole
+      let x2Basis = this.x + (xAngleBasis * (filingLength / 2));
+      let y2Basis = this.y + (yAngleBasis * (filingLength / 2));
+
+      // set the line start point to the filing's farthest-possible-from-pole point in anim phase 1, or to `this.length` of the way past the farthest-from-pole point in anim phase 2
+      let x1 = this.drawingFromOrigin ? x1Basis : x1Basis + (xAngleBasis * (filingLength) * this.length);
+      let y1 = this.drawingFromOrigin ? y1Basis : y1Basis + (yAngleBasis * (filingLength) * this.length);
+
+      // set the line end point to `this.length` of the way past the nearest-to-pole point in anim phase 1, or to the nearest-possible-to-pole point in anim phase 2
+      let x2 = this.drawingFromOrigin ? x1Basis + (xAngleBasis * (filingLength) * this.length) : x2Basis;
+      let y2 = this.drawingFromOrigin ? y1Basis + (yAngleBasis * (filingLength) * this.length) : y2Basis;
 
       ctx.beginPath();
-      ctx.moveTo(this.x, this.y);
-      ctx.lineTo(x1, y1);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
       ctx.stroke();
     }
     
@@ -143,13 +162,13 @@ window.addEventListener('load', ()=>{
   canvas.height = innerHeight;
 
   let maxDistance = Math.max(innerWidth, innerHeight);
-  let filingLength = Math.min(maxDistance / 100, 12);
+  let filingLength = Math.min(maxDistance / 43, 24);
   let magWidth = innerWidth / 2;
   let magHeight = magWidth / 7;
   let mouseX = innerWidth / 2;
   let mouseY = innerHeight / 2;
   let moving = false;
-  let magnetVisible = true;
+  let magnetVisible = false;
   let poleN = { x: mouseX - magWidth / 2 + magHeight / 2, y: mouseY };
   let poleS = { x: mouseX + magWidth / 2 - magHeight / 2, y: mouseY };
   let numFilings = Math.round(maxDistance * 1.5);
