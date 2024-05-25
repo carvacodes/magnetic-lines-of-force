@@ -14,7 +14,7 @@ window.addEventListener('load', ()=>{
       this.nearN;                             // a boolean indicating that the filing is nearer the north magnet pole
       this.nearS;                             // a boolean indicating that the filing is nearer the south magnet pole
       this.length = Math.random();            // the filing's length factor. multiplied by the global filingLength to get length during drawDynamic()
-      this.dynamicSpeed = 0.5;                // the filing's draw speed during drawDynamic()
+      this.dynamicSpeed = 0.33;                // the filing's draw speed during drawDynamic()
       this.drawingFromOrigin = true;          // controls whether the filing is drawing from x,y to its current animation length position or from its current animation length position to its max length
       this.distanceToPoles = {n: 0, s: 0};    // tracks the filing's distance to each magnet pole
       this.pullStrength = 1;                  // animation/rotation speed factor that decreases with the square of the distance from the nearest magnet pole
@@ -262,16 +262,16 @@ window.addEventListener('load', ()=>{
   /*                         */
   /***************************/
   
-  // these variables will adjust each curve's movement speed to match the frame rate of the device (the time between rAF calls)
+  // these variables will adjust movement speed to match the frame rate of the device (the time between rAF calls)
   let firstFrameTime = performance.now();
   let refreshThrottle = 1;
   let tempRefreshThrottle = 0;
 
   function animate(callbackTime) {
-    // this locks the animation to 60fps by using the monitor's refresh rate divided by 60 to calculate per-frame movement
+    // target 30fps by dividing the monitor's refresh rate by 30 to calculate per-frame movement
     tempRefreshThrottle = callbackTime - firstFrameTime;
     firstFrameTime = callbackTime;
-    refreshThrottle = tempRefreshThrottle / 60;
+    refreshThrottle = tempRefreshThrottle / 30;
     
     // fully clear the canvas if the bar magnet is visible. do a 60% fade if it isn't.
     if (magnetVisible) {
