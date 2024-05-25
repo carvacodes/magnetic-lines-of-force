@@ -1,210 +1,296 @@
-let canvas = document.getElementById("canvas");
-let ctx = canvas.getContext("2d");
+window.addEventListener('load', ()=>{
 
-canvas.width = innerWidth;
-canvas.height = innerHeight;
+  /*************************/
+  /*                       */
+  /*        Classes        */
+  /*                       */
+  /*************************/
 
-window.addEventListener("resize", function () {
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
+  class Filing {
+    constructor() {
+      this.x = Math.random() * innerWidth;    // x coordinate
+      this.y = Math.random() * innerHeight;   // y coordinate
+      this.facing = Math.random() * 2;        // the filing's facing angle
+      this.nearN;                             // a boolean indicating that the filing is nearer the north magnet pole
+      this.nearS;                             // a boolean indicating that the filing is nearer the south magnet pole
+      this.length = Math.random();            // the filing's length factor. multiplied by the global filingLength to get length during drawDynamic()
+      this.dynamicSpeed = 0.15;               // the filing's draw speed during drawDynamic()
+      this.distanceToPoles = {n: 0, s: 0};    // tracks the filing's distance to each magnet pole
+      this.pullStrength = 1;                  // animation/rotation speed factor that decreases with the square of the distance from the nearest magnet pole
 
-  filings.forEach(filing => {
-    filing.x = Math.random() * innerWidth;
-    filing.y = Math.random() * innerHeight;
-  });
-});
-
-let numFilings = Math.round(innerWidth * 1.5);
-let filingLength = 12;
-let magWidth = innerWidth / 2;
-let magHeight = magWidth / 7;
-let mouseX = innerWidth / 2;
-let mouseY = innerHeight / 2;
-let moving = 0;
-let magnetVisible = 1;
-let poleN = mouseX - magWidth / 2 + magHeight / 2;
-let poleS = mouseX + magWidth / 2 - magHeight / 2;
-
-class Filing {
-  constructor() {
-    this.x = Math.random() * innerWidth;
-    this.y = Math.random() * innerHeight;
-    this.facing = Math.random() * 2;
-    this.nearN;
-    this.nearS;
-    this.length = Math.random();
-    this.dynamicSpeed = 0.02 + Math.random() * 0.02;
-  }
-
-  rotate() {
-    let deltaX, deltaY, theta, pX, bias;
-    if (this.x < mouseX) {
-      pX = poleN;
-      this.nearN = 1;
-      this.nearS = 0;
-    } else {
-      pX = poleS;
-      this.nearN = 0;
-      this.nearS = 1;
+      this.getDistanceToPoles();              // get pole distances on initialization
     }
-    if (this.x < poleN || this.x > poleS) {
-      deltaX = pX - this.x;
-      deltaY = mouseY - this.y;
-      theta = Math.atan(deltaY / deltaX);
-      if (this.nearS) {
-        theta += Math.PI;
+    
+    ////////////////////////////
+    //        rotate()        //
+    ////////////////////////////
+    rotate() {
+      let deltaX, deltaY, theta, pX, bias;
+      // set nearest-pole properties
+      if (this.x < mouseX) {
+        pX = poleN.x;
+        this.nearN = true;
+        this.nearS = false;
+      } else {
+        pX = poleS.x;
+        this.nearN = false;
+        this.nearS = true;
       }
-    } else {
+
       bias = Math.abs((this.x - mouseX) / (pX - mouseX));
       deltaX = pX - this.x;
       deltaY = (mouseY - this.y) * bias;
       theta = Math.atan(deltaY / deltaX) + Math.PI;
-      if (this.nearS) {
+
+      // rotate the filing another 180 degrees if on the left side of a magnet pole (compensates for extra theta rotation)
+      if ((this.nearS && this.x < poleS.x) || (this.nearN && this.x < poleN.x)) {
         theta += Math.PI;
       }
+      
+      this.facing = theta / Math.PI;
+      this.getDistanceToPoles();
+      this.getPullStrength();
     }
-    this.facing = theta / Math.PI;
-  }
 
-  drawNormal() {
-    ctx.strokeStyle = this.nearN ? "#f00" : "#00f";
-    let x1 = this.x + Math.cos(Math.PI * this.facing) * filingLength;
-    let y1 = this.y + Math.sin(Math.PI * this.facing) * filingLength;
-    let x2 = this.x + Math.cos(Math.PI * (this.facing + 1)) * filingLength;
-    let y2 = this.y + Math.sin(Math.PI * (this.facing + 1)) * filingLength;
+    ////////////////////////////////
+    //        drawStatic()        //
+    ////////////////////////////////
+    drawStatic() {
+      // draw filings closer to the left side in red, filings closer to the right side in blue
+      ctx.strokeStyle = this.nearN ? "#f00" : "#00f";
+      
+      // draw each filing at the correct orientation using its facing angle
+      let x1 = this.x + Math.cos(Math.PI * this.facing) * filingLength;
+      let y1 = this.y + Math.sin(Math.PI * this.facing) * filingLength;
+      let x2 = this.x + Math.cos(Math.PI * (this.facing + 1)) * filingLength;
+      let y2 = this.y + Math.sin(Math.PI * (this.facing + 1)) * filingLength;
 
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
 
-  drawDynamic() {
-    this.length + this.dynamicSpeed >= 1
-      ? ((this.length = 0),
-        (this.x = Math.random() * innerWidth),
-        (this.y = Math.random() * innerHeight),
-        this.rotate())
-      : (this.length += this.dynamicSpeed);
-    let lightness = 60 * this.length;
+    /////////////////////////////////
+    //        drawDynamic()        //
+    /////////////////////////////////
+    drawDynamic(refreshThrottle) {
+      // if the filing's animated length is greater than or equal to one, move it to a new random position and reset its length to zero
+      if (this.length >= 1 || this.distanceToPoles.n - this.length * filingLength <= filingLength || this.distanceToPoles.s - this.length * filingLength <= filingLength) {
+        this.length = 0;
+        /*
+        when not commented out, the next three lines allow the filing to jump to a random location when the its animation is over
+        interestingly, this creates a visual quirk where the area immediately around a magnet pole has fewer filings, since that area's
+        filings will always finish their animations quickly and jump to an area of the screen where they take longer to refresh
+        */
+        // this.x = Math.random() * innerWidth;
+        // this.y = Math.random() * innerHeight;
+        // this.rotate();
+      } else {
+        this.length += this.dynamicSpeed * refreshThrottle * this.pullStrength;
+      }
 
-    if (this.nearN) {
-      ctx.strokeStyle = "hsl(0,100%," + lightness + "%)";
-      let x1 = this.x +
-        Math.cos(Math.PI * this.facing) * (filingLength * this.length * 2);
-      let y1 = this.y +
-        Math.sin(Math.PI * this.facing) * (filingLength * this.length * 2);
+      let lightness = this.nearN ? Math.round(40 * (1 - (this.distanceToPoles.n / maxDistance))) : Math.round(40 * (1 - (this.distanceToPoles.s / maxDistance)));
+      let hue = 360;
+
+      // draw filings closer to the left side in red, filings closer to the right side in blue
+      // filings between the two poles should be on a gradient from blue to red depending on their proximity to one pole or the other
+      if (this.x < poleN.x) {
+        ctx.strokeStyle = `hsl(360, 100%, ${10 + lightness}%)`;
+      } else if (this.x > poleS.x) {
+        ctx.strokeStyle = `hsl(240, 100%, ${10 + lightness}%)`;
+      } else {
+        ctx.strokeStyle = `hsl(${360 - (120 * (Math.abs(this.x - poleN.x) / magWidth))}, 100%, ${10 + lightness}%)`;
+      }
+
+      let x1 = this.x + Math.cos(Math.PI * this.facing) * (filingLength * this.length * 2);
+      let y1 = this.y + Math.sin(Math.PI * this.facing) * (filingLength * this.length * 2);
 
       ctx.beginPath();
       ctx.moveTo(this.x, this.y);
       ctx.lineTo(x1, y1);
       ctx.stroke();
-    } else {
-      ctx.strokeStyle = "hsl(240,100%," + lightness + "%)";
-      ctx.strokeStyle = this.nearN
-        ? "hsl(0,100%," + lightness + "%)"
-        : "hsl(240,100%," + lightness + "%)";
-      let x1 = this.x -
-        Math.cos(Math.PI * this.facing) * (filingLength * this.length * 2);
-      let y1 = this.y -
-        Math.sin(Math.PI * this.facing) * (filingLength * this.length * 2);
+    }
+    
+    ////////////////////////////////////////
+    //        getDistanceToPoles()        //
+    ////////////////////////////////////////
+    getDistanceToPoles() {
+      this.distanceToPoles.n = Math.round(Math.sqrt(Math.pow(this.x - poleN.x, 2) + Math.pow(this.y - poleN.y, 2)));
+      this.distanceToPoles.s = Math.round(Math.sqrt(Math.pow(this.x - poleS.x, 2) + Math.pow(this.y - poleS.y, 2)));
+    }
 
-      ctx.beginPath();
-      ctx.moveTo(this.x, this.y);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
+    /////////////////////////////////////
+    //        getPullStrength()        //
+    /////////////////////////////////////
+    getPullStrength() {
+      this.pullStrength = this.nearN ?
+                          Math.pow(1 - (this.distanceToPoles.n / maxDistance), 2) :
+                          Math.pow(1 - (this.distanceToPoles.s / maxDistance), 2);
     }
   }
-}
 
-let filings = [];
+  /*************************/
+  /*                       */
+  /*        Globals        */
+  /*                       */
+  /*************************/
 
-for (let i = 0; i < numFilings; i++) {
-  filings.push(new Filing());
-  filings[i].rotate();
-}
+  let canvas = document.getElementById("canvas");
+  let ctx = canvas.getContext("2d");
 
-document.addEventListener("mousemove", handleMove, {passive: false});
-document.addEventListener("touchmove", handleMove, {passive: false});
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
 
-document.addEventListener("click", handleClick);
-
-function handleMove(e) {
-  e.preventDefault();
-  if (e.changedTouches) {
-    e = e.touches[0];
-  }
+  let maxDistance = Math.max(innerWidth, innerHeight);
+  let filingLength = Math.min(maxDistance / 100, 12);
+  let magWidth = innerWidth / 2;
+  let magHeight = magWidth / 7;
+  let mouseX = innerWidth / 2;
+  let mouseY = innerHeight / 2;
+  let moving = false;
+  let magnetVisible = true;
+  let poleN = { x: mouseX - magWidth / 2 + magHeight / 2, y: mouseY };
+  let poleS = { x: mouseX + magWidth / 2 - magHeight / 2, y: mouseY };
+  let numFilings = Math.round(maxDistance * 1.5);
   
-  mouseX = e.clientX;
-  mouseY = e.clientY;
-  moving = 1;
-  poleN = mouseX - magWidth / 2 + magHeight / 2;
-  poleS = mouseX + magWidth / 2 - magHeight / 2;
-}
+  let filings = [];
 
-function handleClick(e) {
-  e.preventDefault();
-  magnetVisible = magnetVisible ? 0 : 1;
-}
+  for (let i = 0; i < numFilings; i++) {
+    filings.push(new Filing());
+    filings[i].rotate();
+  }
 
-function drawMagnet() {
-  ctx.fillStyle = "#a22";
-  ctx.fillRect(
-    mouseX - magWidth / 2,
-    mouseY - magHeight / 2,
-    magWidth / 2,
-    magHeight
-  );
-  ctx.fillStyle = "#22a";
-  ctx.fillRect(mouseX, mouseY - magHeight / 2, magWidth / 2, magHeight);
+  /***************************/
+  /*                         */
+  /*        Listeners        */
+  /*                         */
+  /***************************/
+
+  window.addEventListener("resize", ()=>{
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+    numFilings = Math.round(maxDistance * 1.5);
+  });
+  
+  document.addEventListener("mousemove", handleMove);
+  document.addEventListener("touchmove", handleMove, {passive: false});
+
+  document.addEventListener("click", (e)=>{
+    e.preventDefault();
+    magnetVisible = magnetVisible ? false : true;
+  });
+
+  /**************************/
+  /*                        */
+  /*        Handlers        */
+  /*                        */
+  /**************************/
+  function handleMove(e) {
+    e.preventDefault();
+    moving = true;
+
+    // get event x/y
+    mouseX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+    mouseY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+
+    // set the pole properties
+    poleN.x = mouseX - magWidth / 2 + magHeight / 2;
+    poleN.y = mouseY;
+    poleS.x = mouseX + magWidth / 2 - magHeight / 2;
+    poleS.y = mouseY;
+  }
 
   
-}
+  /***************************/
+  /*                         */
+  /*        Functions        */
+  /*                         */
+  /***************************/
 
-function drawAttrPoints() {
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(poleN - 1, mouseY - 1, 2, 2);
-  ctx.fillRect(poleS - 1, mouseY - 1, 2, 2);
-}
-
-let currentTime = Date.now();
-
-function animate() {
-  let frameTime = Date.now();
-
-  if (frameTime - currentTime < 16) {
-    window.requestAnimationFrame(animate);
-    return;
+  // draws a red and blue rectangle representing a bar magnet
+  function drawMagnet() {
+    ctx.fillStyle = "#a22";
+    ctx.fillRect(
+      mouseX - magWidth / 2,
+      mouseY - magHeight / 2,
+      magWidth / 2,
+      magHeight
+    );
+    ctx.fillStyle = "#22a";
+    ctx.fillRect(mouseX, mouseY - magHeight / 2, magWidth / 2, magHeight);
   }
 
-  currentTime = frameTime;
-
-  if (magnetVisible) {
-    ctx.clearRect(0, 0, innerWidth, innerHeight);
-  } else {
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillRect(0, 0, innerWidth, innerHeight);
+  // draws dots at the points of attraction for each magnet pole
+  function drawAttrPoints() {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(poleN.x - 1, poleN.y - 1, 2, 2);
+    ctx.fillRect(poleS.x - 1, poleS.y - 1, 2, 2);
   }
 
-  for (let i = 0; i < filings.length; i++) {
+
+  /***************************/
+  /*                         */
+  /*        Animation        */
+  /*                         */
+  /***************************/
+  
+  // these variables will adjust each curve's movement speed to match the frame rate of the device (which is the time between rAF calls).
+  let firstFrameTime = performance.now();
+  let timerCounter = 0;
+  let refreshThrottle = 1;
+  let tempRefreshThrottle = 0;
+
+  function animate(callbackTime) {
+    // gather movement speed vars for the first four valid frames
+    if (callbackTime) {   // callbackTime can be NaN on frame 2, so check it each time
+      // only gather data on the first four frames of animation
+      if (timerCounter < 5) {
+        timerCounter++;
+        tempRefreshThrottle += callbackTime - firstFrameTime;   // this is a sum, and will be averaged after four frames have elapsed
+      }
+      firstFrameTime = callbackTime;
+    }
+    
+    // calculate the frame update adjustment by averaging the tempRefreshThrottle for these four frames
+    if (timerCounter == 4) {
+      tempRefreshThrottle /= 4;
+      refreshThrottle = 1 / tempRefreshThrottle;
+    }
+
+    // fully clear the canvas if the bar magnet is visible. do a 60% fade if it isn't.
     if (magnetVisible) {
-      filings[i].drawNormal();
+      ctx.clearRect(0, 0, innerWidth, innerHeight);
     } else {
-      filings[i].drawDynamic();
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillRect(0, 0, innerWidth, innerHeight);
     }
-    if (moving) {
-      filings[i].rotate();
+
+    for (let i = 0; i < filings.length; i++) {
+      // rotate each filing
+      if (moving) {
+        filings[i].rotate();
+      }
+
+      // draw each filing depending on the animation state
+      if (magnetVisible) {
+        filings[i].drawStatic();
+      } else {
+        filings[i].drawDynamic(refreshThrottle);
+      }
     }
+
+    // draw the bar magnet if it's visible. otherwise, draw attraction points instead.
+    if (mouseX && magnetVisible) {
+      drawMagnet();
+    } else {
+      drawAttrPoints();
+    }
+
+    // reset the moving variable every frame
+    moving = false;
+    window.requestAnimationFrame(animate);
   }
 
-  if (mouseX && magnetVisible) {
-    drawMagnet();
-  } else {
-    drawAttrPoints();
-  }
-
-  moving = 0;
-  window.requestAnimationFrame(animate);
-}
-
-animate();
+  animate();
+});
