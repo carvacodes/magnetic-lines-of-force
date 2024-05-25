@@ -228,36 +228,23 @@ window.addEventListener('load', ()=>{
     ctx.fillRect(poleS.x - 1, poleS.y - 1, 2, 2);
   }
 
-
   /***************************/
   /*                         */
   /*        Animation        */
   /*                         */
   /***************************/
   
-  // these variables will adjust each curve's movement speed to match the frame rate of the device (which is the time between rAF calls).
+  // these variables will adjust each curve's movement speed to match the frame rate of the device (the time between rAF calls)
   let firstFrameTime = performance.now();
-  let timerCounter = 0;
   let refreshThrottle = 1;
   let tempRefreshThrottle = 0;
 
   function animate(callbackTime) {
-    // gather movement speed vars for the first four valid frames
-    if (callbackTime) {   // callbackTime can be NaN on frame 2, so check it each time
-      // only gather data on the first four frames of animation
-      if (timerCounter < 5) {
-        timerCounter++;
-        tempRefreshThrottle += callbackTime - firstFrameTime;   // this is a sum, and will be averaged after four frames have elapsed
-      }
-      firstFrameTime = callbackTime;
-    }
+    // this locks the animation to 60fps by using the monitor's refresh rate divided by 60 to calculate per-frame movement
+    tempRefreshThrottle = callbackTime - firstFrameTime;
+    firstFrameTime = callbackTime;
+    refreshThrottle = tempRefreshThrottle / 60;
     
-    // calculate the frame update adjustment by averaging the tempRefreshThrottle for these four frames
-    if (timerCounter == 4) {
-      tempRefreshThrottle /= 4;
-      refreshThrottle = 1 / tempRefreshThrottle;
-    }
-
     // fully clear the canvas if the bar magnet is visible. do a 60% fade if it isn't.
     if (magnetVisible) {
       ctx.clearRect(0, 0, innerWidth, innerHeight);
@@ -292,5 +279,5 @@ window.addEventListener('load', ()=>{
     window.requestAnimationFrame(animate);
   }
 
-  animate();
+  animate(0);
 });
