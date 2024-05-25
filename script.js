@@ -89,21 +89,21 @@ window.addEventListener('load', ()=>{
         this.length += this.dynamicSpeed * refreshThrottle * this.pullStrength;   // otherwise, update a filing's animation length
       }
 
-      // this normalizes the distance to the nearest pole on a scale of 30, where a value of 30 is on a magnet pole and a value of 0 is infinitely far away
-      let distFactor30 = this.nearN ? Math.round(30 * (1 - (this.distanceToPoles.n / maxDistance))) : Math.round(30 * (1 - (this.distanceToPoles.s / maxDistance)));
+      // this normalizes the distance to the nearest pole on a scale of 20, where a value of 20 is on a magnet pole and a value of 0 is infinitely far away
+      let distFactor20 = this.nearN ? Math.round(20 * (1 - (this.distanceToPoles.n / maxDistance))) : Math.round(20 * (1 - (this.distanceToPoles.s / maxDistance)));
 
       // draw filings closer to the left side in red, filings closer to the right side in blue
       // filings between the two poles should be on a gradient from blue to red depending on their proximity to one pole or the other
       if (this.x < poleN.x) {
-        ctx.strokeStyle = `hsl(360, 100%, ${30 + distFactor30}%)`;
+        ctx.strokeStyle = `hsl(360, 100%, ${30 + distFactor20}%)`;
       } else if (this.x > poleS.x) {
-        ctx.strokeStyle = `hsl(240, 100%, ${30 + distFactor30}%)`;
+        ctx.strokeStyle = `hsl(240, 100%, ${30 + distFactor20}%)`;
       } else {
-        ctx.strokeStyle = `hsl(${360 - (120 * (Math.abs(this.x - poleN.x) / magWidth))}, 100%, ${30 + distFactor30}%)`;
+        ctx.strokeStyle = `hsl(${360 - (120 * (Math.abs(this.x - poleN.x) / magWidth))}, 100%, ${30 + distFactor20}%)`;
       }
-
+      
       // use heavier line widths for filings closer to a magnet pole
-      ctx.lineWidth = 2 * (distFactor30 / 30);
+      ctx.lineWidth = 2 * (distFactor20 / 20);
       
       // store the angle bases here to avoid repeated sin/cos calculations
       let xAngleBasis = Math.cos(Math.PI * this.facing);
@@ -194,17 +194,26 @@ window.addEventListener('load', ()=>{
   
   document.addEventListener("mousemove", handleMove);
   document.addEventListener("touchmove", handleMove, {passive: false});
-
-  document.addEventListener("click", (e)=>{
-    e.preventDefault();
-    magnetVisible = magnetVisible ? false : true;
-  });
+  document.addEventListener("click", handleClick);
 
   /**************************/
   /*                        */
   /*        Handlers        */
   /*                        */
   /**************************/
+  function handleClick(e) {
+    e.preventDefault();
+    if (magnetVisible) {
+      magnetVisible = false;
+      for (let i = 0; i < filings.length; i++) {
+        filings[i].length == 0;
+        filings[i].drawingFromOrigin == true;
+      }
+    } else {
+      magnetVisible = true;
+    }
+  }
+
   function handleMove(e) {
     e.preventDefault();
     moving = true;
