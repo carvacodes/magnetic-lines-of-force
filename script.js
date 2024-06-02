@@ -8,13 +8,13 @@ window.addEventListener('load', ()=>{
 
   class Filing {
     constructor() {
-      this.x = Math.random() * innerWidth;    // x coordinate
-      this.y = Math.random() * innerHeight;   // y coordinate
+      this.x = Math.random() * _w;            // x coordinate
+      this.y = Math.random() * _h;            // y coordinate
       this.facing = Math.random() * 2;        // the filing's facing angle
       this.nearN;                             // a boolean indicating that the filing is nearer the north magnet pole
       this.nearS;                             // a boolean indicating that the filing is nearer the south magnet pole
       this.length = Math.random();            // the filing's length factor. multiplied by the global filingLength to get length during drawDynamic()
-      this.dynamicSpeed = 0.33;                // the filing's draw speed during drawDynamic()
+      this.dynamicSpeed = 0.33;               // the filing's draw speed during drawDynamic()
       this.drawingFromOrigin = true;          // controls whether the filing is drawing from x,y to its current animation length position or from its current animation length position to its max length
       this.distanceToPoles = {n: 0, s: 0};    // tracks the filing's distance to each magnet pole
       this.pullStrength = 1;                  // animation/rotation speed factor that decreases with the square of the distance from the nearest magnet pole
@@ -59,8 +59,8 @@ window.addEventListener('load', ()=>{
     drawStatic() {
       // draw filings closer to the left side in red, filings closer to the right side in blue
       // ctx.strokeStyle = this.nearN ? "#f00" : "#00f";
-      ctx.strokeStyle = '#333';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#444';
+      ctx.lineWidth = window.devicePixelRatio;
       
       // draw each filing at the correct orientation using its facing angle
       let x1 = this.x + Math.cos(Math.PI * this.facing) * filingLength / 2;
@@ -90,7 +90,9 @@ window.addEventListener('load', ()=>{
       }
 
       // this normalizes the distance to the nearest pole on a scale of 20, where a value of 20 is on a magnet pole and a value of 0 is infinitely far away
-      let distFactor20 = this.nearN ? Math.round(20 * (1 - (this.distanceToPoles.n / maxDistance))) : Math.round(20 * (1 - (this.distanceToPoles.s / maxDistance)));
+      let distFactor20 = this.nearN ?
+        Math.round(20 * (1 - (this.distanceToPoles.n / maxDistance))) :
+        Math.round(20 * (1 - (this.distanceToPoles.s / maxDistance)));
 
       // draw filings closer to the left side in red, filings closer to the right side in blue
       // filings between the two poles should be on a gradient from blue to red depending on their proximity to one pole or the other
@@ -103,7 +105,7 @@ window.addEventListener('load', ()=>{
       }
       
       // use heavier line widths for filings closer to a magnet pole
-      ctx.lineWidth = 2 * (distFactor20 / 20);
+      ctx.lineWidth = 2 * (distFactor20 / 20) * window.devicePixelRatio;
       
       // store the angle bases here to avoid repeated sin/cos calculations
       let xAngleBasis = Math.cos(Math.PI * this.facing);
@@ -158,21 +160,26 @@ window.addEventListener('load', ()=>{
   let canvas = document.getElementById("canvas");
   let ctx = canvas.getContext("2d");
 
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
+  // compensate for device pixel ratio for a crisp image
+  let _w = window.innerWidth * window.devicePixelRatio;
+  let _h = window.innerHeight * window.devicePixelRatio;
 
-  let maxDistance = Math.max(innerWidth, innerHeight);
-  let filingLength = Math.min(maxDistance / 43, 24);
-  let magWidth = innerWidth / 2;
-  let magHeight = magWidth / 7;
-  let mouseX = innerWidth / 2;
-  let mouseY = innerHeight / 2;
-  let moving = false;
-  let magnetVisible = false;
-  let poleN = { x: mouseX - magWidth / 2 + magHeight / 2, y: mouseY };
-  let poleS = { x: mouseX + magWidth / 2 - magHeight / 2, y: mouseY };
-  let numFilings = Math.round(maxDistance * 1.5);
-  
+  canvas.width = _w;
+  canvas.height = _h;
+
+  let maxDistance = Math.sqrt((_w * _w) + (_h * _h));   // the max possible distance for a filing. also the diagonal length of the viewport.
+  let filingLength = Math.max(_w, _h) / 55;             // sets filing length to something comfortable for the viewport
+  let magWidth = _w / 2;            // width of the visualized bar magnet
+  let magHeight = magWidth / 7;     // height of the visualized bar magnet
+  let mouseX = _w / 2;              // starts the mouse cursor at canvas center
+  let mouseY = _h / 2;              // starts the mouse cursor at canvas center
+  let moving = false;               // tracks whether or not the user is currently moving
+  let magnetVisible = false;        // tracks whether or not the bar magnet is visualized
+  let poleN = { x: mouseX - magWidth / 2 + magHeight / 2, y: mouseY };  // the position of each magnet pole
+  let poleS = { x: mouseX + magWidth / 2 - magHeight / 2, y: mouseY };  // the position of each magnet pole
+  let numFilings = Math.round(maxDistance);   // setting the number of filings to the distance makes for a very comfortable fit
+
+  // populate a filings array
   let filings = [];
 
   for (let i = 0; i < numFilings; i++) {
@@ -187,9 +194,7 @@ window.addEventListener('load', ()=>{
   /***************************/
 
   window.addEventListener("resize", ()=>{
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
-    numFilings = Math.round(maxDistance * 1.5);
+    window.location.reload();
   });
   
   document.addEventListener("mousemove", handleMove);
@@ -222,7 +227,24 @@ window.addEventListener('load', ()=>{
     mouseX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
     mouseY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
 
-    // set the pole properties
+    // scale the user's movement input based on the device pixel ratio
+    mouseX *= window.devicePixelRatio;
+    mouseY *= window.devicePixelRatio;
+
+    // bound the user's movement input to no less than x/y = 0 and no greater than the viewport width/height
+    if (mouseX < 0) {
+      mouseX = 0;
+    } else if (mouseX > _w) {
+      mouseX = _w;
+    }
+    
+    if (mouseY < 0) {
+      mouseY = 0;
+    } else if (mouseY > _h) {
+      mouseY = _h;
+    }
+
+    // set the pole positions
     poleN.x = mouseX - magWidth / 2 + magHeight / 2;
     poleN.y = mouseY;
     poleS.x = mouseX + magWidth / 2 - magHeight / 2;
@@ -238,6 +260,7 @@ window.addEventListener('load', ()=>{
 
   // draws a red and blue rectangle representing a bar magnet
   function drawMagnet() {
+    // draw red side
     ctx.fillStyle = "#a22";
     ctx.fillRect(
       mouseX - magWidth / 2,
@@ -245,15 +268,22 @@ window.addEventListener('load', ()=>{
       magWidth / 2,
       magHeight
     );
+
+    // draw blue side
     ctx.fillStyle = "#22a";
-    ctx.fillRect(mouseX, mouseY - magHeight / 2, magWidth / 2, magHeight);
+    ctx.fillRect(
+      mouseX,
+      mouseY - magHeight / 2,
+      magWidth / 2,
+      magHeight);
   }
 
   // draws dots at the points of attraction for each magnet pole
   function drawAttrPoints() {
+    let d = window.devicePixelRatio;
     ctx.fillStyle = "#fff";
-    ctx.fillRect(poleN.x - 1, poleN.y - 1, 2, 2);
-    ctx.fillRect(poleS.x - 1, poleS.y - 1, 2, 2);
+    ctx.fillRect(poleN.x - d, poleN.y - d, d * 2, d * 2);
+    ctx.fillRect(poleS.x - d, poleS.y - d, d * 2, d * 2);
   }
 
   /***************************/
@@ -275,14 +305,14 @@ window.addEventListener('load', ()=>{
     
     // fully clear the canvas if the bar magnet is visible. do a 60% fade if it isn't.
     if (magnetVisible) {
-      ctx.clearRect(0, 0, innerWidth, innerHeight);
+      ctx.clearRect(0, 0, _w, _h);
     } else {
       ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-      ctx.fillRect(0, 0, innerWidth, innerHeight);
+      ctx.fillRect(0, 0, _w, _h);
     }
 
+    // rotate each filing if the user is moving
     for (let i = 0; i < filings.length; i++) {
-      // rotate each filing
       if (moving) {
         filings[i].rotate();
       }
@@ -296,7 +326,7 @@ window.addEventListener('load', ()=>{
     }
 
     // draw the bar magnet if it's visible. otherwise, draw attraction points instead.
-    if (mouseX && magnetVisible) {
+    if (magnetVisible) {
       drawMagnet();
     } else {
       drawAttrPoints();
@@ -307,5 +337,6 @@ window.addEventListener('load', ()=>{
     window.requestAnimationFrame(animate);
   }
 
-  animate(0);
+  window.requestAnimationFrame(animate);
+
 });
